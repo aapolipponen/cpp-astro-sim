@@ -1,58 +1,59 @@
-#include <SDL.h>
 #include <vector>
 #include <random>
+#include <iostream>
+#include <fstream>
+#include <string>
 #include "particle.h"
 #include "constants.h"
 
 int main() {
+    const double radius_cm = 0.05;
+    double radius_pixels = radius_cm / SCALE_FACTOR;
+
+    // Open a file for writing
+    std::ofstream file("data.txt");
 
     std::vector<Particle> particles;
 
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<> pos_dist(-1.0, 1.0); // for positions
+    std::uniform_real_distribution<> pos_dist(-SIMULATION_SIZE_CM/2, SIMULATION_SIZE_CM/2); // for positions within 10cm
     std::uniform_real_distribution<> vel_dist(-0.01, 0.01); // for velocities
     std::uniform_real_distribution<> mass_dist(1.0, 10.0); // for masses
-    std::uniform_real_distribution<> radius_dist(5.0, 15.0); // for radii
+    std::uniform_real_distribution<> radius_dist(radius_cm, radius_cm); // for radii
 
     // Initialize particles with random positions, velocities, masses, and radii
     for (int i = 0; i < N_BODIES; i++) {
-        double x = pos_dist(gen);
-        double y = pos_dist(gen);
+        double x = pos_dist(gen) * SCALE_FACTOR; // convert from cm to pixels
+        double y = pos_dist(gen) * SCALE_FACTOR; // convert from cm to pixels
         double vx = vel_dist(gen);
         double vy = vel_dist(gen);
         double mass = mass_dist(gen);
-        double radius = radius_dist(gen);
-        particles.push_back(Particle(x, y, vx, vy, mass, radius));
+        double radius = radius_dist(gen) * SCALE_FACTOR; // convert from cm to pixels
+        std::string name = "Body " + std::to_string(i);
+        particles.push_back(Particle(x, y, vx, vy, mass, radius, name));
     }
 
-    // Initialize SDL
-    SDL_Init(SDL_INIT_VIDEO);
+    for (int iter = 0; iter < iterations; iter++) {
+        std::cout << "Iteration: " << iter << ", Number of Particles: " << particles.size() << "\n"; // Debugging print
 
-    // Create an SDL window
-    SDL_Window *window = SDL_CreateWindow("Particle Simulation", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 800, 600, SDL_WINDOW_SHOWN);
+        // Compute gravitational forces, print them, and save them to a file.
+        for (int i = 0; i < particles.size(); i++) {
+            Particle &p = particles[i];
+            Vector2D position = p.get_position();
+            double mass = p.get_mass(); // Assuming a get_mass() method in Particle class
+            double radius = p.get_radius(); // Assuming a get_radius() method in Particle class
 
-    // Create a renderer
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+            // Print to console
+            std::cout << p.get_name() << ": Position: (" << position.x << ", " << position.y
+                      << "), Mass: " << mass << ", Radius: " << radius << "\n";
 
-    // Main simulation loop
-    bool running = true;
-    while (running) {
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
-                running = false;
-            }
-        }
+            // Save to file
+            file << p.get_name() << ": Position: (" << position.x << ", " << position.y
+                 << "), Mass: " << mass << ", Radius: " << radius << "\n";
 
-        // Compute gravitational forces
-        for (auto &p1 : particles) {
-            for (auto &p2 : particles) {
-                if (&p1 != &p2) {
-                    Vector2D force = p1.compute_force(p2);
-                    p1.add_force(force);
-                }
-            }
+            int x = static_cast<int>(position.x * 400 + 400);
+            int y = static_cast<int>(position.y * 300 + 300);
         }
 
         // Update velocities and positions
@@ -67,32 +68,51 @@ int main() {
                 double distance = (particles[i].get_position() - particles[j].get_position()).norm();
                 double threshold = particles[i].get_radius() + particles[j].get_radius();
                 if (distance < threshold) {
-                    // Implement inelastic collision logic here...
+                    // Compute total momentum and kinetic energy before collision
+                    Vector2D totalMomentum = particles[i].get_velocity() * particles[i].get_mass() + particles[j].get_velocity() * particles[j].get_mass();
+                    double totalEnergy = 0.5 * particles[i].get_mass() * particles[i].get_velocity().squaredNorm() +
+                                         0.5 * particles[j].get_mass() * particles[j].get_velocity().squaredNorm();
+
+                    // Compute new mass and radius
+                    double combinedMass = particles[i].get_mass() + particles[j].get_mass();
+                    double combinedRadius = pow(pow(particles[i].get_radius(), 3) + pow(particles[j].get_radius(), 3), 1.0/3.0); // Assuming spheres
+
+                    // Compute new position
+                    Vector2D combinedPosition = (particles[i].get_position() * particles[i].get_mass() + particles[j].get_position() * particles[j].get_mass()) / combinedMass;
+
+                    // Calculate lost energy (e.g. 10% loss) and calculate total energy after collision
+                    double energyLoss = 0.1 * totalEnergy; // 10% energy loss
+                    double totalEnergyAfter = totalEnergy - energyLoss;
+
+                    // Calculate the new velocity from momentum conservation and new total energy
+                    Vector2D combinedVelocity = totalMomentum / combinedMass; // velocity from momentum conservation
+                    double newVelocityMagnitude = sqrt(2 * totalEnergyAfter / combinedMass); // velocity from energy conservation
+                    combinedVelocity = combinedVelocity.normalize() * newVelocityMagnitude; // assign the new magnitude to the velocity, keeping the direction
+
+                    // Create new particle
+                    Particle combinedParticle(combinedPosition.x, combinedPosition.y, combinedVelocity.x, combinedVelocity.y, combinedMass, combinedRadius, "Combined Body");
+
+                    // Replace particles[i] with the combined particle
+                    particles[i] = combinedParticle;
+
+                    // Remove particles[j]
+                    particles.erase(particles.begin() + j);
+
+                    // Decrement j to ensure no skipping over the next particle
+                    j--;
                 }
             }
         }
 
-        // Clear the renderer
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-        SDL_RenderClear(renderer);
-
-        // Render each particle as a point (or circle depending on the radius)
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
         for (auto &p : particles) {
             int x = static_cast<int>(p.get_position().x * 400 + 400);
             int y = static_cast<int>(p.get_position().y * 300 + 300);
-            // You can use SDL_RenderDrawPoint if you want to draw them as points, or another function if you want to draw them as circles
-            SDL_RenderDrawPoint(renderer, x, y);
         }
 
-        // Display the particles
-        SDL_RenderPresent(renderer);
-    }
+    } // End of iterations loop
 
-    // Clean up and quit SDL
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+    // Close the file
+    file.close();
 
     return 0;
 }

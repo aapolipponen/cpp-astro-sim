@@ -6,6 +6,10 @@ double Vector2D::norm() const {
     return std::sqrt(x * x + y * y);
 }
 
+double Vector2D::squaredNorm() const {
+    return x * x + y * y;
+}
+
 Vector2D Vector2D::normalize() const {
     double magnitude = norm();
     return Vector2D(x / magnitude, y / magnitude);

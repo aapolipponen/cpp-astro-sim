@@ -2,10 +2,10 @@
 CXX = g++
 
 # Compiler flags
-CXXFLAGS = -Wall -Wextra -std=c++11 -I/data/data/com.termux/files/usr/include/SDL2 -I/data/data/com.termux/files/usr/include -DNO_SHARED_MEMORY -D_REENTRANT -D_THREAD_SAFE
+CXXFLAGS =
 
 # Linker flags
-LDFLAGS = -L/data/data/com.termux/files/usr/lib -lSDL2
+LDFLAGS =
 
 # Source files
 SOURCES = main.cpp particle.cpp Vector2D.cpp

@@ -1,8 +1,8 @@
 #include "particle.h"
+#include <string>
 
-Particle::Particle(double x, double y, double vx, double vy, double mass, double radius)
-    : pos(x, y), vel(vx, vy), mass(mass), force(0, 0), radius(radius) {
-    // other initialization code, if needed
+Particle::Particle(double x, double y, double vx, double vy, double mass, double radius, const std::string &name)
+    : pos(x, y), vel(vx, vy), mass(mass), force(0, 0), radius(radius), name(name) {
 }
 
 Vector2D Particle::compute_force(const Particle &other) const {
